@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <strings.h>
 #include <string.h>
+#include <ctype.h>
 #define MAX 512
 #define TRAJETS_MAX 1000
 #define MOT_MAX 6
@@ -34,8 +35,14 @@ char *adresseIP;
 int port;
 char* trajets[TRAJETS_MAX][MOT_MAX];
 int tailleTrajet = 0;
+int cas1 = 0;
+char heureDepartCas1[MAX];
 
-
+/*
+*   Crée le socket
+*   Une fois le socket crée, crée la connection avec le serveur
+*   et affiche le menu principal de l'application.
+*/
 void preparation(){
 
     int p = socket(AF_INET, SOCK_STREAM, 0);
@@ -71,6 +78,11 @@ void preparation(){
     }  
 }
 
+
+/*
+*   Permet de gérer et contrôler les saisies de l'utilisateur
+*   en tenant compte des noms de villes avec des espaces par exemple
+*/
 void entreeVilles(char *villeDepart, char *villeArrivee){
     int c;
     while((c = getchar()) != '\n' && c != EOF);
@@ -85,6 +97,10 @@ void entreeVilles(char *villeDepart, char *villeArrivee){
 }
 
 
+/*
+*   Envoie dans une 1er temps la taille de la requete a envoyée 
+*   Puis envoie la requete elle-même au serveur
+*/
 void envoyerRequete(char *tab, int connect){
     int tailleTab = strlen(tab);
 
@@ -107,6 +123,12 @@ void envoyerRequete(char *tab, int connect){
 
 }
 
+
+/*
+*   Reçois dans un premier temps la taille de la reponse
+*   Si 0 indique à l'utilisateur qu'il n'y a pas de train 
+*   Sinon reçoit la reponse qui sera traitée
+*/
 void recevoirReponse(int connect){
     int tailleMessage;
     int n ;
@@ -114,15 +136,17 @@ void recevoirReponse(int connect){
     bzero(reponseServeur, MAX);
 
     read(connect, &tailleMessage, sizeof(tailleMessage));
+    printf(" La taille reçu du serveur est %d\n", tailleMessage);
 
     if(tailleMessage == 0){
         printf("Il n'a aucun train correspondant à ces critères\n");
+        cas1 = 0;
     }
     else{
         n = read (connect, reponseServeur, tailleMessage);
+        
     
         if (n >= 0 ){
-           // printf("%s", reponseServeur);
            printf("Le serveur a repondu \n\n");
         }
 
@@ -135,6 +159,11 @@ void recevoirReponse(int connect){
 
 }
 
+
+/*
+* Pour chaque ligne de train reçu du serveur,
+* Cette fonction enleve les dilimiteurs ";" et stock les données dans les champs d'un tableau
+*/
 void enleverDelim(char *line){
     char **tab = calloc(10, 12000);
     char *token;
@@ -155,17 +184,27 @@ void enleverDelim(char *line){
 }
 
 
+/*
+*  Cette fonction calcul le prix de chaque train en fonction du mot clé (SUPPL ou REDUC)
+*  Met à jour le prix dans le champ correspondant du tableau
+*  Affiche le trajet
+*/
 void calculPrix(char **t){
     char **tab = t;
     float prix = 0.0;
+    int verifieReduc = 0;
+    int verifieSuppl = 0; 
+    int verifieTrain = 0;  // pour savoir si c'est le train demandé ou le prochain
 
     if(tab[6] != NULL){
         prix = atof(tab[5]);
         if(strstr(tab[6],"REDUC") != NULL){
             prix -=  prix*0.2; 
+            verifieReduc = 1;
         }
         else if(strstr(tab[6],"SUPPL") != NULL){
             prix += prix*0.1;
+            verifieSuppl = 1;
         }
     }else{
         prix = atof(tab[5]);
@@ -173,11 +212,35 @@ void calculPrix(char **t){
     
     sprintf(tab[5], "%.2f", prix);
     listeTrajet(tab);
-   printf("Le train est : Nº %s | %s | %s | %s | %s | Prix: %s euros\n", tab[0], tab[1],tab[2],tab[3],tab[4],tab[5]);
+  /*  if(cas1 == 1){
+        int heureEnvoye = 0;
+        int heureReçu = 0;
+        heureEnvoye = convertirParMinutes(heureDepartCas1);
+        heureReçu = convertirParMinutes(tab[3]);
+        if((heureReçu - heureDepartCas1) == 0){
+            verifieTrain = 1;
 
+        }
+    }*/
+    if(verifieReduc == 1){
+        printf("Le train est : Nº %s | %s | %s | %s | %s | Prix réduit: %s euros\n", tab[0], tab[1],tab[2],tab[3],tab[4],tab[5]);
+    }
+    else if(verifieSuppl == 1){
+        printf("Le train est : Nº %s | %s | %s | %s | %s | Prix avec supplément: %s euros\n", tab[0], tab[1],tab[2],tab[3],tab[4],tab[5]);
+    }
+    else{
+        printf("Le train est : Nº %s | %s | %s | %s | %s | Prix: %s euros\n", tab[0], tab[1],tab[2],tab[3],tab[4],tab[5]);
+    }
+   
     
 }
 
+
+/*
+*    Parcours la liste d'un trajet donné 
+*    Recupère le prix minimum des trajets 
+*    et affiche le train correspondant (le moins cher)
+*/
 void prixMin() {
     float minPrix = atof(trajets[0][5]);
     int minIndex = 0;
@@ -207,13 +270,21 @@ void prixMin() {
     printf("-------------------------------------------------------------\n\n");
 }
 
+/*
+*   Convertis la durée des trajets en minutes
+*   Pour faciliter le calcul du plus court trajet
+*/
 int convertirParMinutes(char* time) {
     int hours, minutes;
     sscanf(time, "%d:%d", &hours, &minutes);
     return hours * 60 + minutes;
 }
+
+
 /*
-    Calcul et  de train le plus rapide
+*    Calcul l'ecart entre les heures d'arrivée et de depart
+*    Recupère le temps minimum des trajets 
+*    et affiche le train correspondant (le plus rapide)
 */
 void tempsPlusCourt() {
     int minTemps = convertirParMinutes(trajets[0][4]) - convertirParMinutes(trajets[0][3]);
@@ -243,6 +314,7 @@ void tempsPlusCourt() {
     printf("##  Prix       : %s euros\n", trajets[minIndex][5]);
     printf("-------------------------------------------------------------\n\n");
 }
+
 /*
     Utilise les variables globales "trajets" et "tailleTrajet"
     pour mettre tous les trajets renvoyés par le serveur dans un tableau pour des traitements ultérieurs
@@ -256,12 +328,11 @@ void listeTrajet(char **tab) {
 }
 
 /*
-    Affichage du menu principal de l'application avec les fonctionnalités demandées:
-    - Rechercher un train (Ville depart, ville d'arrivée, heure depart)
-    - Rechercher les trains dans une plage d'heures de depart
-    - Afficher tous les trains entre 2 villes
-    * Il prend en paramètres le descripteur et la connection 
-
+*    Affichage du menu principal de l'application avec les fonctionnalités demandées:
+*    - Rechercher un train (Ville depart, ville d'arrivée, heure depart)
+*    - Rechercher les trains dans une plage d'heures de depart
+*    - Afficher tous les trains entre 2 villes
+*    * Il prend en paramètres le descripteur et la connection 
 */
 void affichageMenu(int connect, int c){
     int clavier_in = 0;
@@ -296,10 +367,12 @@ void affichageMenu(int connect, int c){
     switch(clavier_in){
 
         case 1:
+            cas1 = 1;
             entreeVilles(villeDepart, villeArrivee);
 
             printf("Entrer l'heure de départ : ");
             scanf("%s", heureDebut);
+            strcpy(heureDepartCas1, heureDebut);
 
             strcat(tmp, "1;");
             strcat(tmp, villeDepart);
@@ -408,6 +481,10 @@ void affichageMenu3(int connect, int c){
 }
 
 
+/*
+*   Separe la requete reçue du serveur en ligne
+*   Dans notre cas, tous les trains sont renvoyés dans une ligne, separés par des #
+*/
 void separerEnLignes(char *reponseServeur, int tailleMessage){
     char **lignes = (char **) malloc(5000);
     int nbLignes = 0;
@@ -426,15 +503,24 @@ void separerEnLignes(char *reponseServeur, int tailleMessage){
     }
 }
 
+
+/*
+*   Vide le tableau des trajets après chaque requete
+*/
 void vider(){
-    for(int i = 0; i<TRAJETS_MAX; i++){
-         for(int j = 0; j<MOT_MAX; j++){
-            free(trajets[i][j]);
+    if(tailleTrajet > 0){
+        for(int i = 0; i<TRAJETS_MAX; i++){
+            for(int j = 0; j<MOT_MAX; j++){
+                free(trajets[i][j]);
+            }
         }
+        tailleTrajet = 0;
     }
-    tailleTrajet = 0;
 }
+
 int main(int argc, char *argv[]){
+
+    char *argPort = argv[2];
 
 
     if(argc < 2){
@@ -449,6 +535,13 @@ int main(int argc, char *argv[]){
     }
     else{
         adresseIP = argv[1];
+        while(*argPort){
+            if(isdigit((char)*argPort) == 0){
+                printf("Entrer le bon format de Port\n");
+                exit(0);
+            }
+            argPort++;
+        }
         port = atoi(argv[2]);
     }
     preparation();

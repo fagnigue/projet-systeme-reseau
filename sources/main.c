@@ -12,9 +12,6 @@
 int port;
 char *bd;
 
-// conserve le contenu du fichier
-FILE *file;
-
 int main(int argc, char const *argv[])
 {
     if (argc < 2)
@@ -39,16 +36,14 @@ int main(int argc, char const *argv[])
         }
     }
 
-    file = fopen(argv[2], "r");
+    FILE *file = fopen(argv[2], "r");
     if (file == NULL)
     {
         printf("Oups ! fichier inexistant\n");
         exit(1);
     }
-    
+    fclose(file);
     port = atoi(argv[1]);
-    bd = calloc(strlen(argv[2]), sizeof(char));
-    strcpy(bd, argv[2]);
 
     struct sockaddr_in my_addr;
     struct sockaddr_in client_addr;

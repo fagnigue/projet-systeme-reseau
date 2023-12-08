@@ -4,17 +4,13 @@
 
 int main(int argc, char const *argv[])
 {
-    char *str;
-
-    printf("1: strlen: %ld\tsizeof: %ld\n", strlen(str), sizeof(str));
-
-    str = calloc(10, sizeof(char));
-
-    printf("2: strlen: %ld\tsizeof: %ld\n", strlen(str), sizeof(str));
-
-    strcpy(str, "Bonjour");
-
-    printf("3: strlen: %ld\tsizeof: %ld\n", strlen(str), sizeof(str));
+    FILE *file = fopen(argv[2], "r");
+    if (file == NULL)
+    {
+        printf("Oups ! fichier inexistant\n");
+        exit(1);
+    }
+    fclose(file);
 
     return 0;
 }
