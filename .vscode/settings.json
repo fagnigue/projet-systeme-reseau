@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "cstring": "c",
+        "bd.h": "c",
+        "dependencies.h": "c",
+        "socket.h": "c"
+    }
+}
